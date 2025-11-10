@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import requests
-from io import BytesIO
 import math
 
 # Funções de Cálculo
@@ -61,25 +59,28 @@ def calcular_baterias(df_baterias, consumo_ajustado_kwh, autonomia_dias):
 # Interface Streamlit
 st.title("Dimensionamento de Inversores e Baterias")
 
-# Carregar planilha via URL
-url = "https://fortlevsolar-my.sharepoint.com/:x:/r/personal/sebastiao_carara_fortlevsolar_com_br/Documents/EVAGPT/dados_energia.xlsx?d=w6ac877b7071b4a52a1db2e550b67d43c&csf=1&web=1&e=AjvfWX"  # Substitua pela URL real do Excel
-try:
-    response = requests.get(url)
-    excel_data = BytesIO(response.content)
-    df_config = pd.read_excel(excel_data, sheet_name="Configuracoes")
-    excel_data.seek(0)
-    df_equip = pd.read_excel(excel_data, sheet_name="Equipamentos")
-    excel_data.seek(0)
-    df_inversores = pd.read_excel(excel_data, sheet_name="Inversores")
-    excel_data.seek(0)
-    df_baterias = pd.read_excel(excel_data, sheet_name="Baterias")
-    config = dict(zip(df_config['Parametro'], df_config['Valor']))
-except Exception as e:
-    st.error(f"Erro ao carregar planilha: {str(e)}")
+# Uploader para a planilha Excel (em vez de URL, para evitar problemas com SharePoint)
+uploaded_file = st.file_uploader("Carregue a planilha dados_energia.xlsx", type=["xlsx"])
+if uploaded_file is not None:
+    try:
+        df_config = pd.read_excel(uploaded_file, sheet_name="Configuracoes")
+        uploaded_file.seek(0)
+        df_equip = pd.read_excel(uploaded_file, sheet_name="Equipamentos")
+        uploaded_file.seek(0)
+        df_inversores = pd.read_excel(uploaded_file, sheet_name="Inversores")
+        uploaded_file.seek(0)
+        df_baterias = pd.read_excel(uploaded_file, sheet_name="Baterias")
+        config = dict(zip(df_config['Parametro'], df_config['Valor']))
+    except Exception as e:
+        st.error(f"Erro ao ler a planilha: {str(e)}. Verifique as abas e colunas.")
+        df_equip = df_inversores = df_baterias = pd.DataFrame()
+        config = {}
+else:
+    st.warning("Por favor, carregue a planilha para continuar.")
     df_equip = df_inversores = df_baterias = pd.DataFrame()
     config = {}
 
-# Configurações Gerais (como na imagem)
+# Configurações Gerais
 st.header("Configurações Gerais")
 st.session_state.tensao = config.get('Tensao_do_Sistema_V', 48)  # Carregado, não editável
 st.session_state.autonomia = st.number_input("Autonomia (dias)", value=config.get('Autonomia_dias', 2))
@@ -96,9 +97,9 @@ num_equip = st.number_input("Número de Equipamentos", min_value=1, value=1, ste
 for i in range(num_equip):
     col1, col2, col3 = st.columns(3)
     with col1:
-        modelo = st.selectbox(f"Equip {i+1} Nome", options=df_equip['MODELO'].tolist(), key=f"modelo_{i}")
+        modelo = st.selectbox(f"Equip {i+1} Nome", options=df_equip['MODELO'].tolist() if not df_equip.empty else [], key=f"modelo_{i}")
     with col2:
-        if modelo:
+        if modelo and not df_equip.empty:
             row = df_equip[df_equip['MODELO'] == modelo].iloc[0]
             pot = row['POTENCIA']
             fator = row['FATOR PICO']
@@ -121,24 +122,27 @@ for i in range(num_equip):
 # Botões
 col_btn1, col_btn2, col_btn3 = st.columns(3)
 with col_btn1:
-    st.button("Adicionar Equipamento")  # Streamlit não precisa, mas para layout
+    st.button("Adicionar Equipamento")  # Placeholder
 with col_btn2:
     if st.button("Calcular Dimensionamento"):
-        st.session_state.equipamentos = st.session_state.equipamentos[-num_equip:]  # Evitar duplicatas
-        consumo_kwh, continua_kw, pico_kw = calcular_consumo_diario(st.session_state.equipamentos)
+        if uploaded_file is None:
+            st.error("Carregue a planilha primeiro.")
+        else:
+            st.session_state.equipamentos = st.session_state.equipamentos[-num_equip:]
+            consumo_kwh, continua_kw, pico_kw = calcular_consumo_diario(st.session_state.equipamentos)
 
-        st.header("Resultados")
-        st.write(f"Consumo Diário Ajustado: {consumo_kwh:.2f} kWh")
-        st.write(f"Potência Contínua Necessária: {continua_kw:.2f} kW")
-        st.write(f"Potência Pico Necessária: {pico_kw:.2f} kW")
+            st.header("Resultados")
+            st.write(f"Consumo Diário Ajustado: {consumo_kwh:.2f} kWh")
+            st.write(f"Potência Contínua Necessária: {continua_kw:.2f} kW")
+            st.write(f"Potência Pico Necessária: {pico_kw:.2f} kW")
 
-        st.subheader("Sugestões de Inversores")
-        for sug in sugerir_inversores(df_inversores, continua_kw, pico_kw):
-            st.write(sug)
+            st.subheader("Sugestões de Inversores")
+            for sug in sugerir_inversores(df_inversores, continua_kw, pico_kw):
+                st.write(sug)
 
-        st.subheader("Sugestões de Baterias")
-        for sug in calcular_baterias(df_baterias, consumo_kwh, st.session_state.autonomia):
-            st.write(sug)
+            st.subheader("Sugestões de Baterias")
+            for sug in calcular_baterias(df_baterias, consumo_kwh, st.session_state.autonomia):
+                st.write(sug)
 with col_btn3:
     if st.button("Resetar Equipamentos"):
         st.session_state.equipamentos = []
