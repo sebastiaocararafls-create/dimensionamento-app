@@ -37,21 +37,23 @@ def sugerir_inversores(df_inversores, continua_kw, pico_kw):
     return sugestoes
 
 def calcular_baterias(df_baterias, consumo_ajustado_kwh, autonomia_dias):
+    if df_baterias.empty:
+        return ["A aba 'BATERIAS' está vazia. Adicione dados para sugestões."]
     energia_total_kwh = consumo_ajustado_kwh * autonomia_dias
     sugestoes = []
     for _, row in df_baterias.iterrows():
-        dod = row['DoD'] / 100
+        dod = row['DOD'] / 100
         eff = row['EFICIENCIA'] / 100
         capacidade_necessaria_ah = (energia_total_kwh * 1000) / (st.session_state.tensao * dod * eff)
 
         serie_necessaria = math.ceil(st.session_state.tensao / 12)  # Assumindo 12V por bateria; ajuste se necessário
-        paralelo_necessario = math.ceil(capacidade_necessaria_ah / row['CAPACIDADE_AH'])
+        paralelo_necessario = math.ceil(capacidade_necessaria_ah / row['CAPACIDADE AH'])
 
         if serie_necessaria > row['PILHA MAX'] or paralelo_necessario > row['PARALELO MAX']:
             sugestoes.append(f"{row['MODELO']} (excede limites: Série max {row['PILHA MAX']}, Paralelo max {row['PARALELO MAX']})")
         else:
             qtd_total = serie_necessaria * paralelo_necessario
-            sugestoes.append(f"{qtd_total}x {row['MODELO']} ({serie_necessaria} em série x {paralelo_necessario} em paralelo, Cap: {row['CAPACIDADE_AH']}Ah)")
+            sugestoes.append(f"{qtd_total}x {row['MODELO']} ({serie_necessaria} em série x {paralelo_necessario} em paralelo, Cap: {row['CAPACIDADE AH']}Ah)")
     if not sugestoes:
         return "Nenhuma opção encontrada."
     return sugestoes
@@ -59,34 +61,33 @@ def calcular_baterias(df_baterias, consumo_ajustado_kwh, autonomia_dias):
 # Interface Streamlit
 st.title("Dimensionamento de Inversores e Baterias")
 
-# Uploader para a planilha Excel (em vez de URL, para evitar problemas com SharePoint)
+# Uploader para a planilha Excel
 uploaded_file = st.file_uploader("Carregue a planilha dados_energia.xlsx", type=["xlsx"])
 if uploaded_file is not None:
     try:
-        df_config = pd.read_excel(uploaded_file, sheet_name="Configuracoes")
+        # Carregar abas reais da planilha
+        df_equip = pd.read_excel(uploaded_file, sheet_name="EQUIPAMENTOS")
         uploaded_file.seek(0)
-        df_equip = pd.read_excel(uploaded_file, sheet_name="Equipamentos")
+        df_inversores = pd.read_excel(uploaded_file, sheet_name="INVERSORES")
         uploaded_file.seek(0)
-        df_inversores = pd.read_excel(uploaded_file, sheet_name="Inversores")
-        uploaded_file.seek(0)
-        df_baterias = pd.read_excel(uploaded_file, sheet_name="Baterias")
-        config = dict(zip(df_config['Parametro'], df_config['Valor']))
+        df_baterias = pd.read_excel(uploaded_file, sheet_name="BATERIAS")
+
+        # Filtrar NaN em EQUIPAMENTOS para dropdown
+        df_equip = df_equip.dropna(subset=['MODELO', 'POTENCIA', 'FATOR PICO'])
     except Exception as e:
-        st.error(f"Erro ao ler a planilha: {str(e)}. Verifique as abas e colunas.")
+        st.error(f"Erro ao ler a planilha: {str(e)}. Verifique as abas (INVERSORES, BATERIAS, EQUIPAMENTOS).")
         df_equip = df_inversores = df_baterias = pd.DataFrame()
-        config = {}
 else:
     st.warning("Por favor, carregue a planilha para continuar.")
     df_equip = df_inversores = df_baterias = pd.DataFrame()
-    config = {}
 
-# Configurações Gerais
+# Configurações Gerais (defaults, editáveis - sem aba Configuracoes)
 st.header("Configurações Gerais")
-st.session_state.tensao = config.get('Tensao_do_Sistema_V', 48)  # Carregado, não editável
-st.session_state.autonomia = st.number_input("Autonomia (dias)", value=config.get('Autonomia_dias', 2))
-st.session_state.simultaneidade = st.number_input("Fator Simultaneidade", value=config.get('Fator_Simultaneidade', 0.8))
-st.session_state.margem = st.number_input("Margem de Segurança", value=config.get('Margem_Seguranca', 1.2))
-st.session_state.eficiencia = st.number_input("Eficiência do Sistema", value=config.get('Eficiencia_Sistema', 0.85))
+st.session_state.tensao = st.number_input("Tensão do Sistema (V)", value=48)
+st.session_state.autonomia = st.number_input("Autonomia (dias)", value=2)
+st.session_state.simultaneidade = st.number_input("Fator Simultaneidade", value=0.8)
+st.session_state.margem = st.number_input("Margem de Segurança", value=1.2)
+st.session_state.eficiencia = st.number_input("Eficiência do Sistema", value=0.85)
 
 # Equipamentos
 st.header("Equipamentos")
@@ -144,6 +145,10 @@ with col_btn2:
             for sug in calcular_baterias(df_baterias, consumo_kwh, st.session_state.autonomia):
                 st.write(sug)
 with col_btn3:
+    if st.button("Resetar Equipamentos"):
+        st.session_state.equipamentos = []
+        st.rerun()
+
     if st.button("Resetar Equipamentos"):
         st.session_state.equipamentos = []
         st.rerun()
