@@ -62,7 +62,7 @@ def calcular_baterias(df_baterias, consumo_ajustado_kwh, autonomia_dias):
 st.title("Dimensionamento de Inversores e Baterias")
 
 # Carregar planilha via URL
-url = "C:/Users/sebas/OneDrive - FORTLEV SOLAR\EVAGPT/dados_energia.xlsx"  # Substitua pela URL real do Excel
+url = "https://fortlevsolar-my.sharepoint.com/:x:/r/personal/sebastiao_carara_fortlevsolar_com_br/Documents/EVAGPT/dados_energia.xlsx?d=w6ac877b7071b4a52a1db2e550b67d43c&csf=1&web=1&e=AjvfWX"  # Substitua pela URL real do Excel
 try:
     response = requests.get(url)
     excel_data = BytesIO(response.content)
