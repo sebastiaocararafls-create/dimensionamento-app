@@ -2,6 +2,18 @@ import streamlit as st
 import pandas as pd
 import math
 
+# Inicializar valores padrão em session_state
+if 'tensao' not in st.session_state:
+    st.session_state.tensao = 48
+if 'simultaneidade' not in st.session_state:
+    st.session_state.simultaneidade = 0.80
+if 'margem' not in st.session_state:
+    st.session_state.margem = 1.20
+if 'eficiencia' not in st.session_state:
+    st.session_state.eficiencia = 0.85
+if 'autonomia' not in st.session_state:
+    st.session_state.autonomia = 2
+
 # Funções de Cálculo
 def calcular_consumo_diario(equipamentos):
     total_consumo_wh = 0
@@ -47,7 +59,7 @@ def calcular_baterias(df_baterias, consumo_ajustado_kwh, autonomia_dias):
     energia_total_kwh = consumo_ajustado_kwh * autonomia_dias
     sugestoes = []
     for _, row in df_baterias.iterrows():
-        dod = row['DOD'] / 100
+        dod = row['DoD'] / 100
         eff = row['EFICIENCIA'] / 100
         capacidade_necessaria_ah = (energia_total_kwh * 1000) / (st.session_state.tensao * dod * eff)
 
@@ -85,13 +97,17 @@ else:
     st.warning("Carregue a planilha para continuar.")
     df_equip = df_inversores = df_baterias = pd.DataFrame()
 
-# Configurações Gerais
+# Configurações Gerais (apenas Autonomia sempre visível)
 st.header("Configurações Gerais")
-st.session_state.tensao = st.number_input("Tensão do Sistema (V)", value=48)
-st.session_state.autonomia = st.number_input("Autonomia (dias)", value=2)
-st.session_state.simultaneidade = st.number_input("Fator Simultaneidade", value=0.8)
-st.session_state.margem = st.number_input("Margem de Segurança", value=1.2)
-st.session_state.eficiencia = st.number_input("Eficiência do Sistema", value=0.85)
+st.session_state.autonomia = st.number_input("Autonomia (dias)", value=st.session_state.autonomia)
+
+# Checkbox para Configurações Avançadas
+mostrar_avancadas = st.checkbox("Mostrar Configurações Avançadas")
+if mostrar_avancadas:
+    st.session_state.tensao = st.number_input("Tensão do Sistema (V)", value=st.session_state.tensao)
+    st.session_state.simultaneidade = st.number_input("Fator Simultaneidade", value=st.session_state.simultaneidade)
+    st.session_state.margem = st.number_input("Margem de Segurança", value=st.session_state.margem)
+    st.session_state.eficiencia = st.number_input("Eficiência do Sistema", value=st.session_state.eficiencia)
 
 # Equipamentos (escolher modelo, quantidade, tempo)
 st.header("Equipamentos")
